@@ -1,0 +1,262 @@
+#!/bin/sh
+self=$0
+cmd=$1;	shift
+cd=$(pwd)
+
+conffile=/usr/local/etc/mcsm.conf
+if [ ! -f "$conffile" ]
+then
+	conffile=/etc/mcsm.conf
+	if [ ! -f "$conffile" ]
+	then
+		echo "config file nothing."
+		echo "/usr/local/etc/mcsm.conf or /etc/mcsm.conf"
+		exit 1
+	fi
+fi
+
+eval `cat $conffile`
+
+# IN ) mcsm_func_isalive servername
+# OUT) "" OR "PID"
+mcsm_func_isalive () {
+	local	servername=$1
+	local	PID=$(screen -list | grep minecraft-${servername} | sed -r 's/^[^0-9]*([0-9]+).*$/\1/')
+	echo $PID
+}
+
+
+mcsm_func_validate_servername () {
+	local	servername=$1
+	if [ "$servername" == "" ]
+	then
+		echo "servername nothing." 1>&2
+		exit 1
+	fi
+	local	serverdir=$serversdir/$servername
+	if [ ! -d $serverdir ]
+	then
+		echo "${servername} is nothing. please create ${servername}." 1>&2
+		exit 1
+	fi
+
+	echo $serverdir
+}
+
+
+mcsm_func_server_args () {
+	if [ $# == 0 ]
+	then
+		local	ret=""
+		local	dirs=$(ls -d $serversdir/*)
+		for file in $dirs
+		do
+			if [ -f "$file/eula.txt" ]
+			then
+				ret="$ret $(basename $file)"
+			fi
+		done
+		echo $ret
+	else
+		echo $*
+	fi
+} 
+
+
+mcsm_cmd_create () {
+	servername=$1
+	if [ "$servername" == "" ]
+	then
+		echo "$cmd SERVERNAME"
+		exit	1
+	fi
+
+	serverdir=$serversdir/$servername
+	echo "Create server dir '$serverdir'."
+	mkdir -p $serverdir
+	echo "eula=true" >  $serverdir/eula.txt
+
+	echo $serverdir/mcsm.conf
+	cat <<- EOT > $serverdir/mcsm.conf
+		#${servername}_mem_min=1024M
+		#${servername}_mem_max=8192M
+	EOT
+
+	exit	0
+}
+
+
+mcsm_cmd_start () {
+	SERVERS=`mcsm_func_server_args $*`
+	if [ "$?" != "0" ]; then exit 1; fi
+	if [ "$SERVERS" = "" ]
+	then
+		echo "server data nothing in '$serversdir'." 1>&2
+		exit 1
+	fi
+	for servername in $SERVERS
+	do
+		PID=`mcsm_func_isalive $servername`
+		if [ "$PID" == "" ]
+		then
+		fi
+
+		SERVERDIR=`mcsm_func_validate_servername $servername`
+		if [ "$?" != "0" ]; then exit 1; fi
+
+		if [ -f "$SERVERDIR/mcsm.conf" ]
+		then
+			eval `cat $SERVERDIR/mcsm.conf`
+		fi
+
+		echo "Wakeup $servername."
+
+		eval "local mem_min=\${${servername}_mem_min}"
+		eval "local mem_max=\${${servername}_mem_max}"
+		eval : \${mem_min:="1024M"}
+		eval : \${mem_max:="4096M"}
+
+		eval `cat ${jardir}/ver.conf`
+		jarname=spigot-${ver}.jar
+		jar=$jardir/$jarname
+
+		cd "${SERVERDIR}" \
+		&& screen -h 1024 -dmS minecraft-${servername} java -Xms${mem_min} -Xmx${mem_max} -jar ${jar} nogui
+
+	done
+	exit 0
+}
+
+
+mcsm_cmd_stop () {
+	SERVERS=`mcsm_func_server_args $*`
+	if [ "$?" != "0" ]; then exit 1; fi
+	if [ "$SERVERS" = "" ]
+	then
+		echo "server data nothing in '$serversdir'." 1>&2
+		exit 1
+	fi
+
+	for servername in $SERVERS
+	do
+		PID=`mcsm_func_isalive $servername`
+		if [ "$PID" != "" ]
+		then
+			echo "Stopping '$servername' please wait for about 30 seconds."
+			screen -S minecraft-${servername}  -X eval 'stuff "stop\015"'
+			while ps -p $PID > /dev/null
+			do
+				/bin/sleep 1
+			done
+		fi
+	done
+	exit	0
+}
+
+
+mcsm_cmd_status () {
+
+	SERVERS=`mcsm_func_server_args $*`
+	if [ "$?" != "0" ]; then exit 1; fi
+	if [ "$SERVERS" = "" ]
+	then
+		echo "server data nothing in '$serversdir'." 1>&2
+		exit 1
+	fi
+
+	printf "%6s  %s\\n" "PID" "Servername"
+	for servername in $SERVERS
+	do
+		serverdir=`mcsm_func_validate_servername $servername`
+		if [ "$?" != "0" ]; then exit 1; fi
+
+		PID=`mcsm_func_isalive $servername`
+		if [ "$?" != "0" ]; then exit 1; fi
+
+		if [ "$PID" == "" ]
+		then
+			printf "%6s  %s\\n" "---" "$servername"
+		else
+			printf "%6d  %s\\n" "$PID" "$servername"
+		fi
+	done
+
+	exit	0
+}
+
+mcsm_cmd_console () {
+	servername=$1
+	if [ "$servername" == "" ]
+	then
+		echo "$cmd SERVERNAME"
+		exit 1
+	fi
+	PID=`mcsm_func_isalive $servername`
+	if [ "$PID" == "" ]
+	then
+		echo "$servername is not active"
+		exit	1
+	fi
+	screen -r minecraft-$servername
+
+
+	exit	0
+}
+
+mcsm_cmd_update () {
+	ver=$1
+	if [ "$ver" == "" ]
+	then
+		echo "$cmd VERSION"
+		echo "example) $cmd 1.12"
+		exit 1
+	fi
+
+	mkdir -p "${jardir}"
+	cd "${jardir}" \
+	&& fetch https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar \
+	&& java -jar BuildTools.jar --rev $ver
+
+	echo "ver=$ver" > ${jardir}/ver.conf
+
+	exit	0
+}
+
+if [ "$cmd" == "create" ]
+then
+	mcsm_cmd_create $*
+fi
+
+if [ "$cmd" == "delete" ]
+then
+	mcsm_cmd_delete $*
+fi
+
+if [ "$cmd" == "update" ]
+then
+	mcsm_cmd_update $*
+fi
+
+if [ "$cmd" == "start" ]
+then
+	mcsm_cmd_start $*
+fi
+
+if [ "$cmd" == "stop" ]
+then
+	mcsm_cmd_stop $*
+fi
+
+if [ "$cmd" == "status" ]
+then
+	mcsm_cmd_status $*
+fi
+
+if [ "$cmd" == "console" ]
+then
+	mcsm_cmd_console $*
+fi
+
+echo "Unkown command $cmd."
+exit	1
+

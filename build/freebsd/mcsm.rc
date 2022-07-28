@@ -1,0 +1,60 @@
+#!/bin/sh
+
+# PROVIDE: mcsm
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following line to /etc/rc.conf to enable mcsm:
+# mcsm_enable="YES"
+#
+
+. /etc/rc.subr
+
+name="mcsm"
+rcvar=mcsm_enable
+
+_command="MCSM_PREFIX/mcsm"
+
+extra_commands="status create delete console"
+
+start_cmd="do_start"
+stop_cmd="do_stop"
+status_cmd="do_status"
+create_cmd="do_create"
+delete_cmd="do_delete"
+console_cmd="do_console"
+
+load_rc_config "$name"
+
+: ${mcsm_enable="NO"}
+
+path=$path:/usr/local/bin
+export path
+
+do_start () {
+	$_command start
+}
+
+do_stop () {
+	$_command stop
+}
+
+do_status () {
+	$_command status
+}
+
+do_console () {
+	$_command console $*
+}
+
+do_create () {
+	$_command create $*
+}
+
+do_delete () {
+	$_command delete $*
+}
+
+
+run_rc_command "$1"
