@@ -33,3 +33,8 @@
 
 # Mercurial repositories
 .hg
+.hgignore
+
+# FreeBSD ports generate
+build/freebsd/ports/distinfo
+build/freebsd/ports/mcsm-*

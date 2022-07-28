@@ -1,0 +1,3 @@
+bin/mcsm
+etc/mcsm.conf.default
+etc/rc.d/mcsm

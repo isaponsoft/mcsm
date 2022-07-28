@@ -1,0 +1,11 @@
+================================
+mcsm : Minecraft server manager.
+================================
+Wellcom mcsm.
+mcsm setup:
+  1. cp etc/mcsm.conf.example etc/mcsm.conf
+  2. mcsm update MINECRAFT-SERVER-VERSION (ex 1.12, 1.19...)
+  3. mcsm create SERVERNAME
+  4. mcsm start SERVERNAME
+  5. service mcsm enable
+--------------------------------

@@ -58,9 +58,6 @@ Stopping 'MYWORLD' please wait for about 30 seconds.
 ```
 
 
-exit console : Ctrl+a => d
-
-
 ## Auto start & Auto stop
 
 ```sh
